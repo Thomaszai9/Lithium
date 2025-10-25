@@ -112,3 +112,55 @@ if country_filter != "All":
 
 for _, row in filtered.iterrows():
     st.markdown(f"- [{row['Title']}]({row['Link']})  \n  📅 {row['Published']} | 🏳️ {row['Country']} | ⚠️ {row['Risk']}")
+# -------------------------------
+# 5. Export Disruption Data for MILP
+# -------------------------------
+st.subheader("⚙️ Export Disruption Summary for MILP Optimization")
+
+# Default impact values by risk level
+risk_defaults = {
+    "High":  {"LT_add_periods": 1, "Cap_mult": 0.6, "Sea_block": 0, "Air_block": 0, "Trans_cost_add": 2.0},
+    "Medium":{"LT_add_periods": 0, "Cap_mult": 0.8, "Sea_block": 0, "Air_block": 0, "Trans_cost_add": 1.0},
+    "Low":   {"LT_add_periods": 0, "Cap_mult": 0.9, "Sea_block": 0, "Air_block": 0, "Trans_cost_add": 0.5},
+    "Normal": {"LT_add_periods": 0, "Cap_mult": 1.0, "Sea_block": 0, "Air_block": 0, "Trans_cost_add": 0.0}
+}
+
+# Prepare disruption summary per country
+if not df.empty:
+    disruption_rows = []
+    today = datetime.now()
+    month_start = today.replace(day=1).strftime("%Y-%m-%d")
+    month_end = today.replace(day=28).strftime("%Y-%m-%d")
+
+    for country, group in df.groupby("Country"):
+        # Identify most severe risk level
+        risk_levels = ["Normal", "Low", "Medium", "High"]
+        group_risks = group["Risk"].unique().tolist()
+        top_risk = max(group_risks, key=lambda r: risk_levels.index(r)) if group_risks else "Normal"
+
+        impact = risk_defaults.get(top_risk, risk_defaults["Normal"])
+
+        disruption_rows.append({
+            "Country": country,
+            "Risk": top_risk,
+            "Start": month_start,
+            "End": month_end,
+            "LT_add_periods": impact["LT_add_periods"],
+            "Cap_mult": impact["Cap_mult"],
+            "Sea_block": impact["Sea_block"],
+            "Air_block": impact["Air_block"],
+            "Trans_cost_add": impact["Trans_cost_add"]
+        })
+
+    disruption_df = pd.DataFrame(disruption_rows)
+    st.dataframe(disruption_df)
+
+    # Download button for MILP
+    st.download_button(
+        label="⬇️ Download disruptions.csv for MILP Model",
+        data=disruption_df.to_csv(index=False).encode("utf-8"),
+        file_name="disruptions.csv",
+        mime="text/csv"
+    )
+else:
+    st.warning("No disruption data available yet — try refreshing the RSS feed.")
